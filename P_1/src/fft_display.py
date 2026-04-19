@@ -19,8 +19,10 @@ def fft_display(image):
         plt.figure(figsize=(5, 10))
         plt.subplot(2, 1, 1)
         plt.imshow(img, cmap="gray")
+        plt.title("Original png image")
         plt.subplot(2, 1, 2)
         plt.imshow(shifted_fft_log_scale, cmap="gray")
+        plt.title("Log Power Spectrum of the image")
         plt.show()
     else:
         img = img.copy()
@@ -38,12 +40,16 @@ def fft_display(image):
             shifted_fft_channel = np.fft.fftshift(channel_to_fft)
             shifted_fft_log_scale[:,:,i] = np.log(np.abs(shifted_fft_channel) + 1)
 
-        shifted_fft_log_scale = shifted_fft_log_scale / np.max(shifted_fft_log_scale)
+        max_val = np.max(shifted_fft_log_scale)
+        if max_val > 0:
+            shifted_fft_log_scale = shifted_fft_log_scale / max_val
 
         plt.figure(figsize=(5, 10))
         plt.subplot(2, 1, 1)
         plt.imshow(img)
+        plt.title("Original png image")
         plt.subplot(2, 1, 2)
         plt.imshow(shifted_fft_log_scale)
+        plt.title("Log Power Spectrum of the image")
         plt.show()
 
