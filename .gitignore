@@ -1,0 +1,32 @@
+# Wygenerowane pliki i cache pythona
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Środowiska wirtualne
+venv/
+env/
+ENV/
+.env
+.venv/
+
+# Pliki środowisk IDE i edytorów
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# Pliki systemowe
+.DS_Store
+Thumbs.db
+
+# Pliki tymczasowe / logi / bazy danych SQLite
+*.log
+*.sqlite3
+db.sqlite3
+
+*.pdf
+
