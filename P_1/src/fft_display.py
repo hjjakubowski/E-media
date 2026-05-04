@@ -1,11 +1,29 @@
-import cv2 as cv
+from .fft_services import Cv2ImageLoader, NumpyRoundTripFftAnalyzer, FftVerificationService
+from .fft_presenters import MatplotlibFftPresenter
+from .fft_models import FftAnalysisResult
+
+
+def analyze_fft(image_path: str, tolerance: float = 1e-6) -> FftAnalysisResult:
+    service = FftVerificationService(
+        loader=Cv2ImageLoader(),
+        analyzer=NumpyRoundTripFftAnalyzer(tolerance=tolerance),
+    )
+    return service.analyze_image(image_path)
+
+
+def fft_display(image_path: str, tolerance: float = 1e-6) -> FftAnalysisResult:
+    result = analyze_fft(image_path, tolerance=tolerance)
+    MatplotlibFftPresenter().show(result)
+    return result
+
+"""import cv2 as cv
 import numpy as np
 import matplotlib.pyplot as plt
 
 
 
-
-def fft_display(image):
+    
+    def fft_display(image):
     img = cv.imread(image, cv.IMREAD_UNCHANGED)
     if img is None:
         raise ValueError(f"Could not read the image at")
@@ -52,4 +70,4 @@ def fft_display(image):
         plt.imshow(shifted_fft_log_scale)
         plt.title("Log Power Spectrum of the image")
         plt.show()
-
+"""
