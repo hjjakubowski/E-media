@@ -9,7 +9,7 @@ def to_rgb_or_gray(image: np.ndarray) -> np.ndarray:
     if image.ndim == 2:
         return image
     elif image.ndim == 3 and image.shape[2] == 4:
-        return cv.cvtColor(image, cv.COLOR_RGBA2RGB)
+        return cv.cvtColor(image, cv.COLOR_BGRA2RGBA)
     elif image.ndim == 3 and image.shape[2] == 3:
         return cv.cvtColor(image, cv.COLOR_BGR2RGB)
     else:
@@ -48,10 +48,10 @@ class NumpyRoundTripFftAnalyzer:
             mse=mse,
             rmse=rmse,
             mae=mae,
-            max_abs=max_abs,
-            psnr=psnr,
+            max_abs_error=max_abs,
+            psnr_db=psnr,
         )
-        return spectrum_log, channel_rec, metrics
+        return spectrum_log, channel_rec, err, metrics
 
     def _build_summary(self, channel_metrics: List[ChannelMetrics]) -> FftMetricsSummary:
         mse_mean = float(np.mean([m.mse for m in channel_metrics]))
@@ -77,14 +77,14 @@ class NumpyRoundTripFftAnalyzer:
 
         if image.ndim == 2:
             spectrum, rec, err, metrics  = self._channel_analysis(image, 0)
-            reconstructed_unit8 = np.clip(np.rint(rec), 0, 255).astype(np.uint8)
+            reconstructed_uint8 = np.clip(np.rint(rec), 0, 255).astype(np.uint8)
             summary = self._build_summary([metrics])
 
             return FftAnalysisResult(
                 mode='gray',
                 original=image,
                 spectrum_log_display=spectrum,
-                reconstructed_unit8=reconstructed_unit8,
+                reconstructed_uint8=reconstructed_uint8,
                 error_map=np.abs(err),
                 channel_metrics=[metrics],
                 summary=summary,
@@ -96,11 +96,11 @@ class NumpyRoundTripFftAnalyzer:
         per_channel = []
 
         for i in range(3):
-            spectrum, rec, err, metrics  = self._channel_analysis(image, 0)
+            spectrum, rec, err, metrics  = self._channel_analysis(image[:, :, i], i)
             spectrums.append(spectrum)
-            reconstructed_unit8 = np.clip(np.rint(rec), 0, 255).astype(np.uint8)
-            reconstructed_channels.append(reconstructed_unit8)
-            errors.append(err)
+            reconstructed_uint8_ch = np.clip(np.rint(rec), 0, 255).astype(np.uint8)
+            reconstructed_channels.append(reconstructed_uint8_ch)
+            errors.append(np.abs(err))
             per_channel.append(metrics)
 
         spectrum_log_display = np.stack(spectrums, axis=2)
@@ -109,7 +109,7 @@ class NumpyRoundTripFftAnalyzer:
         if max_val > 0:
             spectrum_log_display = spectrum_log_display / max_val
 
-        reconstructed_unit8 = np.stack(reconstructed_channels, axis=2)
+        reconstructed_uint8 = np.stack(reconstructed_channels, axis=2)
         error_map = np.stack(errors, axis=2)
         summary = self._build_summary(per_channel)
 
@@ -117,7 +117,7 @@ class NumpyRoundTripFftAnalyzer:
             mode='rgb',
             original=image,
             spectrum_log_display=spectrum_log_display,
-            reconstructed_unit8=reconstructed_unit8,
+            reconstructed_uint8=reconstructed_uint8,
             error_map=error_map,
             channel_metrics=per_channel,
             summary=summary,

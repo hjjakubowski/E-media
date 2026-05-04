@@ -22,4 +22,3 @@ if __name__ == '__main__':
     report = anonymize_png_chunks(chunks, output_image)
     print(f"Anonimizacja: kept={report['kept']}, removed={report['removed']}, removed_types={report['removed_types']}")
 
-

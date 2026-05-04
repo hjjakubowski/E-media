@@ -27,6 +27,7 @@ class FftAnalysisResult:
     original: np.ndarray
     spectrum_log_display: np.ndarray
     reconstructed_uint8: np.ndarray
+    error_map: np.ndarray
     channel_metrics: List[ChannelMetrics]
     summary: FftMetricsSummary
 
