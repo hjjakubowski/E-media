@@ -32,7 +32,7 @@ class NumpyRoundTripFftAnalyzer:
 
         freq = np.fft.fft2(channel_org)
         freq_shift = np.fft.fftshift(freq)
-        spectrum_log = np.log10(np.abs(freq_shift))
+        spectrum_log = np.log10(np.abs(freq_shift) + 1.0)
 
         channel_rec = np.fft.ifft2(freq).real
         err = channel_rec - channel_org

@@ -5,6 +5,14 @@ from typing import BinaryIO, Iterable
 
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 
+COLOR_TYPES = {
+    0: "grayscale",
+    2: "truecolor",
+    3: "indexed-color",
+    4: "grayscale with alpha",
+    6: "truecolor with alpha",
+}
+
 
 @dataclass
 class PngChunk:
@@ -57,6 +65,7 @@ def parse_ihdr(chunk_data: bytes) -> dict:
         "height": height,
         "bit_depth": bit_depth,
         "color_type": color_type,
+        "color_type_name": COLOR_TYPES.get(color_type, "unknown"),
         "compression": compression,
         "filter_method": filter_method,
         "interlace_method": interlace_method,
@@ -76,7 +85,7 @@ def display_IHDR_chunks_info(image: str) -> None:
 
     print(
         f"Width: {ihdr['width']},\n Height: {ihdr['height']},\n Bit depth: {ihdr['bit_depth']},\n "
-        f"Color: {ihdr['color_type']},\n Compression: {ihdr['compression']},\n "
+        f"Color: {ihdr['color_type']} ({ihdr['color_type_name']}),\n Compression: {ihdr['compression']},\n "
         f"Filter method: {ihdr['filter_method']},\n interlace method: {ihdr['interlace_method']}"
     )
 
@@ -115,7 +124,7 @@ def load_all_chunks(image: str) -> list[PngChunk]:
 def decode_time(data: bytes) -> str | None:
     if len(data) != 7:
         return None
-    year, month, day, hour, minute, second = st.unpack(">HBBBBBB", data)
+    year, month, day, hour, minute, second = st.unpack(">HBBBBB", data)
     return f"{year}-{month:02d}-{day:02d} {hour:02d}:{minute:02d}:{second:02d}"
 
 
@@ -152,12 +161,53 @@ def decode_exif_summary(data: bytes) -> dict | None:
     return {"endian": endian.decode("ascii"), "num_tags": num_tags}
 
 
+def decode_plte_summary(data: bytes) -> dict | None:
+    if len(data) == 0 or len(data) % 3 != 0:
+        return None
+
+    colors = []
+    for i in range(0, min(len(data), 15), 3):
+        colors.append(tuple(data[i : i + 3]))
+
+    return {"entries": len(data) // 3, "first_colors": colors}
+
+
+def bytes_to_hex_preview(data: bytes, limit: int = 16) -> str:
+    if not data:
+        return ""
+    preview = " ".join(f"{byte:02X}" for byte in data[:limit])
+    return preview if len(data) <= limit else f"{preview} ..."
+
+
 def describe_chunk(chunk: PngChunk) -> str:
     chunk_name = chunk.chunk_type.decode("ascii", errors="replace")
     role = "critical" if chunk.is_critical else "ancillary"
-    base = f"[{chunk.index}] {chunk_name} ({role}, {chunk.length} B)"
+    base = (
+        f"[{chunk.index}] {chunk_name} ({role}, {chunk.length} B, "
+        f"crc=0x{chunk.crc_read:08X})"
+    )
 
-    if chunk.chunk_type == b"tIME":
+    if chunk.chunk_type == b"IHDR":
+        ihdr = parse_ihdr(chunk.data)
+        return (
+            f"{base} - width={ihdr['width']}, height={ihdr['height']}, "
+            f"bit_depth={ihdr['bit_depth']}, color_type={ihdr['color_type']} "
+            f"({ihdr['color_type_name']}), compression={ihdr['compression']}, "
+            f"filter={ihdr['filter_method']}, interlace={ihdr['interlace_method']}"
+        )
+    elif chunk.chunk_type == b"PLTE":
+        decoded = decode_plte_summary(chunk.data)
+        if decoded:
+            return (
+                f"{base} - palette_entries={decoded['entries']}, "
+                f"first_colors_rgb={decoded['first_colors']}"
+            )
+        return f"{base} - invalid PLTE data length"
+    elif chunk.chunk_type == b"IDAT":
+        return f"{base} - compressed_image_data, first_bytes={bytes_to_hex_preview(chunk.data)}"
+    elif chunk.chunk_type == b"IEND":
+        return f"{base} - end_of_png, empty={chunk.length == 0}"
+    elif chunk.chunk_type == b"tIME":
         decoded = decode_time(chunk.data)
         if decoded:
             return f"{base} - time={decoded}"
@@ -206,5 +256,3 @@ def anonymize_png_chunks(chunks: Iterable[PngChunk], output_image: str) -> dict:
 def load_all_chunks_and_anonimize(image: str, output_image: str) -> dict:
     chunks = load_all_chunks(image)
     return anonymize_png_chunks(chunks, output_image)
-
-
