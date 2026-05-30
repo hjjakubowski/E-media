@@ -1,9 +1,20 @@
 import struct as st
 import zlib
+from hashlib import sha256
 from dataclasses import dataclass
 from typing import BinaryIO, Iterable
 
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+MAX_CHUNK_LENGTH = 256 * 1024 * 1024
+RENDERING_RELEVANT_ANCILLARY_CHUNKS = {
+    b"bKGD",
+    b"cHRM",
+    b"gAMA",
+    b"iCCP",
+    b"sBIT",
+    b"sRGB",
+    b"tRNS",
+}
 
 COLOR_TYPES = {
     0: "grayscale",
@@ -23,6 +34,9 @@ class PngChunk:
     crc_calc: int
     is_critical: bool
     index: int
+    offset: int
+    data_offset: int
+    trailing_data: bytes = b""
 
 
 def read_chunk(f: BinaryIO) -> tuple[bytes, bytes, int, int, int]:
@@ -30,10 +44,14 @@ def read_chunk(f: BinaryIO) -> tuple[bytes, bytes, int, int, int]:
     if len(length_raw) != 4:
         raise EOFError("Brak danych na dlugosc chunka")
     (chunk_length,) = st.unpack(">I", length_raw)
+    if chunk_length > MAX_CHUNK_LENGTH:
+        raise ValueError(f"Chunk is too large: {chunk_length} bytes")
 
     chunk_type = f.read(4)
     if len(chunk_type) != 4:
         raise EOFError("Brak danych na typ chunka")
+    if not all(65 <= byte <= 90 or 97 <= byte <= 122 for byte in chunk_type):
+        raise ValueError(f"Invalid PNG chunk type: {chunk_type!r}")
 
     chunk_data = f.read(chunk_length)
     if len(chunk_data) != chunk_length:
@@ -100,6 +118,7 @@ def load_all_chunks(image: str) -> list[PngChunk]:
         index = 0
 
         while True:
+            offset = f.tell()
             chunk_type, chunk_data, length, crc_read, crc_calc = read_chunk(f)
             is_critical = not (chunk_type[0] & 32)
             chunks.append(
@@ -111,10 +130,13 @@ def load_all_chunks(image: str) -> list[PngChunk]:
                     crc_calc=crc_calc,
                     is_critical=is_critical,
                     index=index,
+                    offset=offset,
+                    data_offset=offset + 8,
                 )
             )
 
             if chunk_type == b"IEND":
+                chunks[-1].trailing_data = f.read()
                 break
             index += 1
 
@@ -166,17 +188,27 @@ def decode_plte_summary(data: bytes) -> dict | None:
         return None
 
     colors = []
-    for i in range(0, min(len(data), 15), 3):
+    for i in range(0, len(data), 3):
         colors.append(tuple(data[i : i + 3]))
 
-    return {"entries": len(data) // 3, "first_colors": colors}
+    return {"entries": len(data) // 3, "colors": colors}
 
 
-def bytes_to_hex_preview(data: bytes, limit: int = 16) -> str:
+def bytes_to_hex(data: bytes, limit: int | None = 16) -> str:
     if not data:
         return ""
+    if limit is None:
+        return " ".join(f"{byte:02X}" for byte in data)
     preview = " ".join(f"{byte:02X}" for byte in data[:limit])
     return preview if len(data) <= limit else f"{preview} ..."
+
+
+def chunk_sha256(data: bytes) -> str:
+    return sha256(data).hexdigest()
+
+
+def should_keep_chunk_for_anonymization(chunk: PngChunk) -> bool:
+    return chunk.is_critical or chunk.chunk_type in RENDERING_RELEVANT_ANCILLARY_CHUNKS
 
 
 def describe_chunk(chunk: PngChunk) -> str:
@@ -184,6 +216,7 @@ def describe_chunk(chunk: PngChunk) -> str:
     role = "critical" if chunk.is_critical else "ancillary"
     base = (
         f"[{chunk.index}] {chunk_name} ({role}, {chunk.length} B, "
+        f"offset={chunk.offset}, data_offset={chunk.data_offset}, "
         f"crc=0x{chunk.crc_read:08X})"
     )
 
@@ -200,13 +233,20 @@ def describe_chunk(chunk: PngChunk) -> str:
         if decoded:
             return (
                 f"{base} - palette_entries={decoded['entries']}, "
-                f"first_colors_rgb={decoded['first_colors']}"
+                f"colors_rgb={decoded['colors']}, data_hex={bytes_to_hex(chunk.data, None)}"
             )
         return f"{base} - invalid PLTE data length"
     elif chunk.chunk_type == b"IDAT":
-        return f"{base} - compressed_image_data, first_bytes={bytes_to_hex_preview(chunk.data)}"
+        return (
+            f"{base} - compressed_image_data, sha256={chunk_sha256(chunk.data)}, "
+            f"data_hex={bytes_to_hex(chunk.data, None)}"
+        )
     elif chunk.chunk_type == b"IEND":
-        return f"{base} - end_of_png, empty={chunk.length == 0}"
+        return (
+            f"{base} - end_of_png, empty={chunk.length == 0}, "
+            f"trailing_bytes={len(chunk.trailing_data)}, "
+            f"trailing_hex={bytes_to_hex(chunk.trailing_data, None)}"
+        )
     elif chunk.chunk_type == b"tIME":
         decoded = decode_time(chunk.data)
         if decoded:
@@ -221,7 +261,10 @@ def describe_chunk(chunk: PngChunk) -> str:
         if decoded:
             return f"{base} - EXIF endian={decoded['endian']}, tags={decoded['num_tags']}"
 
-    return base
+    if chunk.is_critical:
+        return f"{base} - data_hex={bytes_to_hex(chunk.data, None)}"
+
+    return f"{base} - data_hex={bytes_to_hex(chunk.data, 64)}"
 
 
 def write_chunk(f_out: BinaryIO, chunk_type: bytes, chunk_data: bytes) -> None:
@@ -237,20 +280,44 @@ def anonymize_png_chunks(chunks: Iterable[PngChunk], output_image: str) -> dict:
     kept = 0
     removed = 0
     removed_types: dict[str, int] = {}
+    kept_types: dict[str, int] = {}
+    kept_rendering_ancillary_types: dict[str, int] = {}
+    idat_hashes_before = []
+    idat_hashes_after = []
+    trailing_removed = 0
 
     with open(output_image, "wb") as f_out:
         f_out.write(PNG_SIGNATURE)
 
         for chunk in chunks:
-            if chunk.is_critical:
+            if should_keep_chunk_for_anonymization(chunk):
                 write_chunk(f_out, chunk.chunk_type, chunk.data)
                 kept += 1
+                name = chunk.chunk_type.decode("ascii", errors="replace")
+                kept_types[name] = kept_types.get(name, 0) + 1
+                if not chunk.is_critical:
+                    kept_rendering_ancillary_types[name] = kept_rendering_ancillary_types.get(name, 0) + 1
+                if chunk.chunk_type == b"IDAT":
+                    digest = chunk_sha256(chunk.data)
+                    idat_hashes_before.append(digest)
+                    idat_hashes_after.append(digest)
+                if chunk.chunk_type == b"IEND":
+                    trailing_removed += len(chunk.trailing_data)
             else:
                 removed += 1
                 name = chunk.chunk_type.decode("ascii", errors="replace")
                 removed_types[name] = removed_types.get(name, 0) + 1
 
-    return {"kept": kept, "removed": removed, "removed_types": removed_types}
+    return {
+        "kept": kept,
+        "removed": removed,
+        "kept_types": kept_types,
+        "kept_rendering_ancillary_types": kept_rendering_ancillary_types,
+        "removed_types": removed_types,
+        "trailing_removed": trailing_removed,
+        "idat_preserved": idat_hashes_before == idat_hashes_after,
+        "idat_sha256": idat_hashes_after,
+    }
 
 
 def load_all_chunks_and_anonimize(image: str, output_image: str) -> dict:

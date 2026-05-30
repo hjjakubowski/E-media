@@ -5,24 +5,38 @@ from .fft_models import FftAnalysisResult
 
 class MatplotlibFftPresenter:
     def show(self, result: FftAnalysisResult) -> None:
-        plt.figure(figsize=(11, 8))
+        plt.figure(figsize=(13, 8))
 
-        plt.subplot(2, 2, 1)
+        plt.subplot(2, 3, 1)
         plt.title("Original image")
         plt.imshow(result.original, cmap="gray" if result.mode == "gray" else None)
         plt.axis("off")
 
-        plt.subplot(2, 2, 2)
+        plt.subplot(2, 3, 2)
         plt.title("FFT log-spectrum")
-        plt.imshow(result.spectrum_log_display, cmap="gray" if result.mode == "gray" else None)
+        spectrum = result.spectrum_log_display
+        spectrum_cmap = "gray" if result.mode == "gray" else None
+        if spectrum.ndim == 3 and spectrum.shape[2] == 4:
+            spectrum = np.mean(spectrum, axis=2)
+            spectrum_cmap = "gray"
+        plt.imshow(spectrum, cmap=spectrum_cmap)
         plt.axis("off")
 
-        plt.subplot(2, 2, 3)
+        plt.subplot(2, 3, 3)
+        plt.title("FFT phase")
+        phase = result.phase_display
+        if phase.ndim == 3:
+            phase = np.mean(phase, axis=2)
+        im_phase = plt.imshow(phase, cmap="twilight", vmin=-np.pi, vmax=np.pi)
+        plt.colorbar(im_phase, fraction=0.046, pad=0.04)
+        plt.axis("off")
+
+        plt.subplot(2, 3, 4)
         plt.title("IFFT reconstructed")
-        plt.imshow(result.reconstructed_uint8, cmap="gray" if result.mode == "gray" else None)
+        plt.imshow(result.reconstructed, cmap="gray" if result.mode == "gray" else None)
         plt.axis("off")
 
-        plt.subplot(2, 2, 4)
+        plt.subplot(2, 3, 5)
         plt.title("Absolute error map")
         err = result.error_map
         if err.ndim == 3:

@@ -4,7 +4,7 @@ import contextlib
 import io
 import os
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import numpy as np
@@ -33,6 +33,7 @@ if str(PROJECT_DIR) not in sys.path:
     sys.path.insert(0, str(PROJECT_DIR))
 
 from src.chunks import (  # noqa: E402
+    PngChunk,
     anonymize_png_chunks,
     describe_chunk,
     display_IHDR_chunks_info,
@@ -49,7 +50,8 @@ from src.fft_models import FftAnalysisResult  # noqa: E402
 @dataclass(frozen=True)
 class PngAnalysis:
     image_path: Path
-    anonymized_path: Path
+    anonymized_path: Path | None
+    chunks: tuple[PngChunk, ...]
     fft: FftAnalysisResult
     console_output: str
 
@@ -107,20 +109,33 @@ def analyze_png_file(image_path: str | os.PathLike[str], tolerance: float = 1e-6
             print(describe_chunk(chunk))
         print()
 
-        anonymized_path = _unique_anonymized_path(path)
-        report = anonymize_png_chunks(chunks, str(anonymized_path))
-        print(
-            "Anonimizacja: "
-            f"kept={report['kept']}, removed={report['removed']}, "
-            f"removed_types={report['removed_types']}, output={anonymized_path}"
-        )
+        print("Anonimizacja: nie wykonano. Uzyj przycisku anonimizacji dla wybranego pliku.")
 
     return PngAnalysis(
         image_path=path,
-        anonymized_path=anonymized_path,
+        anonymized_path=None,
+        chunks=tuple(chunks),
         fft=fft_result,
         console_output=output.getvalue(),
     )
+
+
+def anonymize_analysis_result(result: PngAnalysis) -> tuple[PngAnalysis, str]:
+    anonymized_path = _unique_anonymized_path(result.image_path)
+    report = anonymize_png_chunks(result.chunks, str(anonymized_path))
+    message = (
+        "Anonimizacja wykonana: "
+        f"kept={report['kept']}, removed={report['removed']}, "
+        f"kept_rendering_ancillary={report.get('kept_rendering_ancillary_types', {})}, "
+        f"removed_types={report['removed_types']}, trailing_removed={report.get('trailing_removed', 0)}, "
+        f"idat_preserved={report.get('idat_preserved', False)}, output={anonymized_path}"
+    )
+    updated = replace(
+        result,
+        anonymized_path=anonymized_path,
+        console_output=f"{result.console_output.rstrip()}\n\n{message}\n",
+    )
+    return updated, message
 
 
 def _normalize_to_uint8(array: np.ndarray) -> np.ndarray:
@@ -161,10 +176,8 @@ def numpy_to_qimage(array: np.ndarray, force_gray: bool = False, hot: bool = Fal
         return QImage(image.data, width, height, width, QImage.Format_Grayscale8).copy()
 
     if data.ndim == 3:
-        if data.shape[2] == 4:
-            image = data[:, :, :3]
-        else:
-            image = data[:, :, :3]
+        channels = 4 if data.shape[2] >= 4 else 3
+        image = data[:, :, :channels]
 
         if image.dtype != np.uint8:
             finite = np.isfinite(image)
@@ -175,15 +188,16 @@ def numpy_to_qimage(array: np.ndarray, force_gray: bool = False, hot: bool = Fal
             else:
                 image = _normalize_to_uint8(image)
         image = np.ascontiguousarray(image)
-        height, width, _ = image.shape
-        return QImage(image.data, width, height, width * 3, QImage.Format_RGB888).copy()
+        height, width, channels = image.shape
+        image_format = QImage.Format_RGBA8888 if channels == 4 else QImage.Format_RGB888
+        return QImage(image.data, width, height, width * channels, image_format).copy()
 
     raise ValueError(f"Nieobslugiwany format tablicy obrazu: {data.shape}")
 
 
 class AnalysisSignals(QObject):
-    result_ready = Signal(object)
-    error = Signal(str, str)
+    result_ready = Signal(int, object)
+    error = Signal(int, str, str)
     finished = Signal()
 
 
@@ -195,11 +209,11 @@ class AnalysisWorker(QRunnable):
 
     @Slot()
     def run(self) -> None:
-        for path in self.paths:
+        for index, path in enumerate(self.paths):
             try:
-                self.signals.result_ready.emit(analyze_png_file(path))
+                self.signals.result_ready.emit(index, analyze_png_file(path))
             except Exception as exc:
-                self.signals.error.emit(path, str(exc))
+                self.signals.error.emit(index, path, str(exc))
         self.signals.finished.emit()
 
 
@@ -334,6 +348,7 @@ class AnalysisPage(QWidget):
     def __init__(self) -> None:
         super().__init__()
         self.results: list[PngAnalysis | None] = []
+        self.finished_rows: set[int] = set()
 
         root = QVBoxLayout(self)
         root.setContentsMargins(18, 16, 18, 18)
@@ -342,12 +357,17 @@ class AnalysisPage(QWidget):
         top = QHBoxLayout()
         self.title = QLabel("Analiza w toku")
         self.title.setObjectName("analysisTitle")
+        self.anonymize_button = QPushButton("Anonimizuj wybrany plik")
+        self.anonymize_button.setObjectName("secondaryButton")
+        self.anonymize_button.setEnabled(False)
+        self.anonymize_button.clicked.connect(self.anonymize_selected)
         self.next_button = QPushButton("Analizuj kolejne zdjecie")
         self.next_button.setObjectName("secondaryButton")
         self.next_button.hide()
         self.next_button.clicked.connect(self.select_more)
         top.addWidget(self.title)
         top.addStretch(1)
+        top.addWidget(self.anonymize_button)
         top.addWidget(self.next_button)
         root.addLayout(top)
 
@@ -365,10 +385,12 @@ class AnalysisPage(QWidget):
         plots_layout.setSpacing(10)
         self.original = PlotPanel("Original image")
         self.spectrum = PlotPanel("FFT log-spectrum")
+        self.phase = PlotPanel("FFT phase")
         self.reconstructed = PlotPanel("IFFT reconstructed")
         self.error_map = PlotPanel("Absolute error map")
         plots_layout.addWidget(self.original, 0, 0)
         plots_layout.addWidget(self.spectrum, 0, 1)
+        plots_layout.addWidget(self.phase, 0, 2)
         plots_layout.addWidget(self.reconstructed, 1, 0)
         plots_layout.addWidget(self.error_map, 1, 1)
         content.addWidget(plots, 1)
@@ -382,21 +404,20 @@ class AnalysisPage(QWidget):
 
     def reset(self, paths: list[str]) -> None:
         self.results = [None] * len(paths)
+        self.finished_rows.clear()
         self.file_list.clear()
         self.console.clear()
         self.title.setText(f"Analiza w toku: 0/{len(paths)}")
+        self.anonymize_button.setEnabled(False)
         self.next_button.hide()
         for path in paths:
             item = QListWidgetItem(Path(path).name)
             item.setToolTip(str(Path(path).expanduser().resolve()))
             self.file_list.addItem(item)
 
-    def add_result(self, result: PngAnalysis) -> None:
-        row = self._row_for_path(result.image_path)
-        if row < 0:
-            row = len(self.results)
-            self.results.append(None)
-            self.file_list.addItem(QListWidgetItem(result.image_path.name))
+    def add_result(self, row: int, result: PngAnalysis) -> None:
+        if row < 0 or row >= len(self.results):
+            return
         self.results[row] = result
         item = self.file_list.item(row)
         if item is not None:
@@ -404,38 +425,75 @@ class AnalysisPage(QWidget):
             item.setToolTip(str(result.image_path))
         if self.file_list.currentRow() < 0:
             self.file_list.setCurrentRow(row)
-        completed = sum(1 for item_result in self.results if item_result is not None)
-        self.title.setText(f"Analiza w toku: {completed}/{self.file_list.count()}")
+        self._mark_finished(row)
         self.show_result(row)
 
-    def add_error(self, path: str, message: str) -> None:
-        row = self._row_for_path(Path(path))
-        if row >= 0:
+    def add_error(self, row: int, path: str, message: str) -> None:
+        if 0 <= row < len(self.results):
             item = self.file_list.item(row)
             if item is not None:
                 item.setText(f"{Path(path).name} - blad")
+            self._mark_finished(row)
         self.console.appendPlainText(f"Blad analizy pliku {path}:\n{message}\n")
 
     def finish(self) -> None:
-        self.title.setText("Analiza zakonczona")
+        self.title.setText(f"Analiza zakonczona: {len(self.finished_rows)}/{self.file_list.count()}")
         self.next_button.show()
 
     def show_result(self, row: int) -> None:
         if row < 0 or row >= len(self.results):
+            self.anonymize_button.setEnabled(False)
             return
         result = self.results[row]
         if result is None:
+            self.anonymize_button.setEnabled(False)
             return
         fft = result.fft
         is_gray = fft.mode == "gray"
         self.original.set_image(numpy_to_qimage(fft.original, force_gray=is_gray))
-        self.spectrum.set_image(numpy_to_qimage(fft.spectrum_log_display, force_gray=is_gray))
-        self.reconstructed.set_image(numpy_to_qimage(fft.reconstructed_uint8, force_gray=is_gray))
+        spectrum = fft.spectrum_log_display
+        force_spectrum_gray = is_gray
+        if spectrum.ndim == 3 and spectrum.shape[2] == 4:
+            spectrum = np.mean(spectrum, axis=2)
+            force_spectrum_gray = True
+        self.spectrum.set_image(numpy_to_qimage(spectrum, force_gray=force_spectrum_gray))
+        phase = fft.phase_display
+        if phase.ndim == 3:
+            phase = np.mean(phase, axis=2)
+        self.phase.set_image(numpy_to_qimage(phase, force_gray=True))
+        self.reconstructed.set_image(numpy_to_qimage(fft.reconstructed, force_gray=is_gray))
         err = fft.error_map
         if err.ndim == 3:
             err = np.mean(err, axis=2)
         self.error_map.set_image(numpy_to_qimage(err, hot=True))
         self.console.setPlainText(result.console_output)
+        self.anonymize_button.setEnabled(True)
+
+    def anonymize_selected(self) -> None:
+        row = self.file_list.currentRow()
+        if row < 0 or row >= len(self.results):
+            return
+        result = self.results[row]
+        if result is None:
+            return
+        try:
+            updated, _message = anonymize_analysis_result(result)
+        except Exception as exc:
+            self.console.appendPlainText(f"\nBlad anonimizacji pliku {result.image_path}:\n{exc}\n")
+            return
+
+        self.results[row] = updated
+        item = self.file_list.item(row)
+        if item is not None:
+            item.setText(f"{updated.image_path.name} - zanonimizowano")
+        self.console.setPlainText(updated.console_output)
+
+    def _mark_finished(self, row: int) -> None:
+        self.finished_rows.add(row)
+        self._update_progress()
+
+    def _update_progress(self) -> None:
+        self.title.setText(f"Analiza w toku: {len(self.finished_rows)}/{self.file_list.count()}")
 
     def _row_for_path(self, path: Path) -> int:
         resolved = str(path.expanduser().resolve())

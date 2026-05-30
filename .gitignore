@@ -27,6 +27,8 @@ Thumbs.db
 *.log
 *.sqlite3
 db.sqlite3
+data/
 
 *.pdf
-
+.codex
+E_media_projekt_1-1.md
