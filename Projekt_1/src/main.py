@@ -47,7 +47,7 @@ def main() -> None:
     print(f"FFT phase image saved to: {phase_path}")
 
     print()
-    run_fft_self_test()
+    #run_fft_self_test()
 
     print()
     anonymized_path = anonymize_png(SOURCE_PNG, chunks, OUTPUT_DIR)
