@@ -12,10 +12,15 @@ from src.fourier_analysis import (
     save_fourier_spectrum,
     save_image_preview,
 )
-from src.png_analysis import anonymize_png, print_critical_chunks, read_png_chunks
+from src.png_analysis import (
+    anonymize_png,
+    print_ancillary_chunks,
+    print_critical_chunks,
+    read_png_chunks,
+)
 
 
-SOURCE_PNG = PROJECT_DIR / "data" / "Black.png"
+SOURCE_PNG = PROJECT_DIR / "data" / "Black_metadata.png"
 OUTPUT_DIR = PROJECT_DIR / "output"
 
 
@@ -29,6 +34,9 @@ def main() -> None:
     print()
 
     print_critical_chunks(chunks)
+    print()
+
+    print_ancillary_chunks(chunks)
     print()
 
     preview_path = save_image_preview(SOURCE_PNG, OUTPUT_DIR)
