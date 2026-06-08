@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from pathlib import Path
 import binascii
 
-
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 HEX_BYTES_PER_LINE = 16
 MAX_PREVIEW_BYTES = 64
@@ -250,7 +249,9 @@ def print_time(chunk: PngChunk) -> None:
     second = chunk.data[6]
 
     print("tIME fields:")
-    print(f"  last modification time: {year:04d}-{month:02d}-{day:02d} {hour:02d}:{minute:02d}:{second:02d} UTC")
+    print(
+        f"  last modification time: {year:04d}-{month:02d}-{day:02d} {hour:02d}:{minute:02d}:{second:02d} UTC"
+    )
 
 
 def print_text(chunk: PngChunk) -> None:
@@ -403,7 +404,9 @@ def anonymize_png(source_path: Path, chunks: list[PngChunk], output_dir: Path) -
 
     print(f"Removed ancillary chunks: {removed_chunks}")
     print_chunk_table(anonymized_chunks, "Chunks after anonymization:")
-    print("Anonymization rewrites the PNG sequentially, so removed chunks leave no empty byte ranges.")
+    print(
+        "Anonymization rewrites the PNG sequentially, so removed chunks leave no empty byte ranges."
+    )
 
     return anonymized_path
 

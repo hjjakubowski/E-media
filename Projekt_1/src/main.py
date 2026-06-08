@@ -1,7 +1,6 @@
 from pathlib import Path
 import sys
 
-
 PROJECT_DIR = Path(__file__).resolve().parents[1]
 
 if str(PROJECT_DIR) not in sys.path:
@@ -18,7 +17,6 @@ from src.png_analysis import (
     print_critical_chunks,
     read_png_chunks,
 )
-
 
 SOURCE_PNG = PROJECT_DIR / "data" / "Black_metadata.png"
 OUTPUT_DIR = PROJECT_DIR / "output"
@@ -47,7 +45,7 @@ def main() -> None:
     print(f"FFT phase image saved to: {phase_path}")
 
     print()
-    #run_fft_self_test()
+    # run_fft_self_test()
 
     print()
     anonymized_path = anonymize_png(SOURCE_PNG, chunks, OUTPUT_DIR)

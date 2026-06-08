@@ -34,7 +34,6 @@ from src.png_analysis import (  # noqa: E402
     read_png_chunks,
 )
 
-
 DATA_DIR = PROJECT_DIR / "data"
 OUTPUT_DIR = PROJECT_DIR / "output"
 IMAGE_SIZE = (320, 220)
@@ -60,7 +59,9 @@ class PngAnalyzerGui:
         top_frame.grid(row=0, column=0, sticky="ew")
         top_frame.columnconfigure(1, weight=1)
 
-        choose_button = ttk.Button(top_frame, text="Wybierz PNG", command=self.choose_file)
+        choose_button = ttk.Button(
+            top_frame, text="Wybierz PNG", command=self.choose_file
+        )
         choose_button.grid(row=0, column=0, sticky="w")
         self.choose_button = choose_button
 
@@ -79,12 +80,16 @@ class PngAnalyzerGui:
         self.add_image_panel(images_frame, "magnitude", "Widmo amplitudowe FFT", 1, 0)
         self.add_image_panel(images_frame, "phase", "Widmo fazowe FFT", 1, 1)
 
-        output_frame = ttk.LabelFrame(self.root, text="Informacje z analizy", padding=10)
+        output_frame = ttk.LabelFrame(
+            self.root, text="Informacje z analizy", padding=10
+        )
         output_frame.grid(row=2, column=0, padx=10, pady=(0, 10), sticky="nsew")
         output_frame.columnconfigure(0, weight=1)
         output_frame.rowconfigure(0, weight=1)
 
-        self.output_text = scrolledtext.ScrolledText(output_frame, height=14, wrap="none")
+        self.output_text = scrolledtext.ScrolledText(
+            output_frame, height=14, wrap="none"
+        )
         self.output_text.grid(row=0, column=0, sticky="nsew")
         self.output_text.configure(state="disabled")
 

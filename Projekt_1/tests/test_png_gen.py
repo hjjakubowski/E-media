@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 import binascii
 
-
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 
 PROJECT_DIR = Path(__file__).resolve().parents[1]
@@ -93,7 +92,9 @@ def make_exif_chunk() -> bytes:
 
     next_ifd_offset = (0).to_bytes(4, byte_order)
 
-    exif_data = tiff_header + ifd_entry_count + ifd_entry + next_ifd_offset + description
+    exif_data = (
+        tiff_header + ifd_entry_count + ifd_entry + next_ifd_offset + description
+    )
     return make_chunk("eXIf", exif_data)
 
 
