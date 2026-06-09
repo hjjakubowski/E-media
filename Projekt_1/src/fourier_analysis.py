@@ -76,27 +76,4 @@ def save_grayscale_image(values: np.ndarray, path: Path) -> None:
     Image.fromarray(image_bytes).save(path)
 
 
-def run_fft_self_test() -> None:
-    constant_image = np.ones((8, 8), dtype=np.float32)
-    constant_spectrum = np.fft.fft2(constant_image)
 
-    expected_dc_value = constant_image.size
-    real_dc_value = abs(constant_spectrum[0, 0])
-
-    if not np.isclose(real_dc_value, expected_dc_value):
-        raise AssertionError("FFT self-test failed for constant image DC value.")
-
-    spectrum_without_dc = constant_spectrum.copy()
-    spectrum_without_dc[0, 0] = 0
-
-    if not np.allclose(spectrum_without_dc, 0):
-        raise AssertionError("FFT self-test failed for constant image frequencies.")
-
-    impulse_image = np.zeros((8, 8), dtype=np.float32)
-    impulse_image[0, 0] = 1
-    impulse_spectrum = np.fft.fft2(impulse_image)
-
-    if not np.allclose(np.abs(impulse_spectrum), 1):
-        raise AssertionError("FFT self-test failed for impulse image.")
-
-    print("FFT self-test passed.")

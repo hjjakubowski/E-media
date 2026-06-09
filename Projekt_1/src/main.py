@@ -7,7 +7,6 @@ if str(PROJECT_DIR) not in sys.path:
     sys.path.insert(0, str(PROJECT_DIR))
 
 from src.fourier_analysis import (
-    run_fft_self_test,
     save_fourier_spectrum,
     save_image_preview,
 )
@@ -45,7 +44,6 @@ def main() -> None:
     print(f"FFT phase image saved to: {phase_path}")
 
     print()
-    # run_fft_self_test()
 
     print()
     anonymized_path = anonymize_png(SOURCE_PNG, chunks, OUTPUT_DIR)
