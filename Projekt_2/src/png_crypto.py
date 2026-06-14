@@ -29,6 +29,8 @@ from .rsa_modes import SUPPORTED_MODES, decrypt_bytes, encrypt_bytes, encrypted_
 
 
 METADATA_VERSION = 1
+PAYLOAD_PIXELS = "pixels"
+PAYLOAD_COMPRESSED_IDAT = "compressed_idat"
 
 
 def encrypt_png(
@@ -64,6 +66,7 @@ def encrypt_png(
 
     metadata = {
         "version": METADATA_VERSION,
+        "payload": PAYLOAD_PIXELS,
         "mode": normalized_mode,
         "width": source_ihdr.width,
         "height": source_ihdr.height,
@@ -100,6 +103,7 @@ def decrypt_png(
 
     metadata = read_metadata(chunks)
     validate_metadata(metadata, encrypted_ihdr, private_key)
+    validate_payload(metadata, PAYLOAD_PIXELS)
 
     carrier_pixels = decode_pixels(encrypted_ihdr, idat_data(chunks))
     cipher_length = int(metadata["cipher_length"])
@@ -128,6 +132,109 @@ def decrypt_png(
     output_chunks = without_chunks(chunks, RSA_METADATA_CHUNK)
     output_chunks = replace_ihdr(output_chunks, output_ihdr)
     output_chunks = replace_idat(output_chunks, output_idat)
+
+    write_png(output_path, output_chunks)
+    return output_path
+
+
+def encrypt_compressed_idat_png(
+    source_path: Path,
+    output_path: Path,
+    public_key: RsaPublicKey,
+    mode: str,
+) -> Path:
+    normalized_mode = mode.lower()
+
+    if normalized_mode not in SUPPORTED_MODES:
+        raise ValueError(f"Unsupported RSA mode: {mode}")
+
+    chunks = read_png(source_path)
+    source_ihdr = parse_ihdr(chunks)
+    validate_supported_png(source_ihdr, expected_bit_depth=8)
+
+    compressed_idat = idat_data(chunks)
+    cipher_length = encrypted_length(len(compressed_idat), public_key)
+
+    encrypted_ihdr = encrypted_png_ihdr(source_ihdr)
+    capacity = encrypted_capacity(encrypted_ihdr)
+
+    if cipher_length > capacity:
+        raise ValueError(
+            "RSA ciphertext does not fit in the 16-bit PNG carrier. "
+            f"Need {cipher_length} bytes, capacity is {capacity} bytes."
+        )
+
+    ciphertext, iv = encrypt_bytes(compressed_idat, public_key, normalized_mode)
+    carrier_pixels = ciphertext.ljust(capacity, b"\x00")
+    encrypted_idat = encode_pixels(encrypted_ihdr, carrier_pixels)
+
+    metadata = {
+        "version": METADATA_VERSION,
+        "payload": PAYLOAD_COMPRESSED_IDAT,
+        "mode": normalized_mode,
+        "width": source_ihdr.width,
+        "height": source_ihdr.height,
+        "color_type": source_ihdr.color_type,
+        "original_bit_depth": source_ihdr.bit_depth,
+        "encrypted_bit_depth": encrypted_ihdr.bit_depth,
+        "plain_length": len(compressed_idat),
+        "cipher_length": len(ciphertext),
+        "key_bytes": key_byte_size(public_key.n),
+        "plain_block_size": plain_block_size(public_key),
+        "iv": iv.hex(),
+    }
+
+    output_chunks = without_chunks(chunks, RSA_METADATA_CHUNK)
+    output_chunks = replace_ihdr(output_chunks, encrypted_ihdr)
+    output_chunks = replace_idat(output_chunks, encrypted_idat)
+    output_chunks = insert_before_first_idat(
+        output_chunks,
+        make_chunk(RSA_METADATA_CHUNK, encode_metadata(metadata)),
+    )
+
+    write_png(output_path, output_chunks)
+    return output_path
+
+
+def decrypt_compressed_idat_png(
+    source_path: Path,
+    output_path: Path,
+    private_key: RsaPrivateKey,
+) -> Path:
+    chunks = read_png(source_path)
+    encrypted_ihdr = parse_ihdr(chunks)
+    validate_supported_png(encrypted_ihdr, expected_bit_depth=16)
+
+    metadata = read_metadata(chunks)
+    validate_metadata(metadata, encrypted_ihdr, private_key)
+    validate_payload(metadata, PAYLOAD_COMPRESSED_IDAT)
+
+    carrier_pixels = decode_pixels(encrypted_ihdr, idat_data(chunks))
+    cipher_length = int(metadata["cipher_length"])
+    ciphertext = carrier_pixels[:cipher_length]
+    iv = bytes.fromhex(str(metadata.get("iv", "")))
+
+    compressed_idat = decrypt_bytes(
+        ciphertext,
+        private_key,
+        int(metadata["plain_length"]),
+        str(metadata["mode"]),
+        iv,
+    )
+
+    output_ihdr = Ihdr(
+        width=int(metadata["width"]),
+        height=int(metadata["height"]),
+        bit_depth=int(metadata["original_bit_depth"]),
+        color_type=int(metadata["color_type"]),
+        compression_method=0,
+        filter_method=0,
+        interlace_method=0,
+    )
+
+    output_chunks = without_chunks(chunks, RSA_METADATA_CHUNK)
+    output_chunks = replace_ihdr(output_chunks, output_ihdr)
+    output_chunks = replace_idat(output_chunks, compressed_idat)
 
     write_png(output_path, output_chunks)
     return output_path
@@ -197,3 +304,12 @@ def validate_metadata(
 
     if int(metadata["plain_block_size"]) != expected_plain_size:
         raise ValueError("Private key block size does not match encrypted PNG metadata.")
+
+
+def validate_payload(metadata: dict[str, object], expected_payload: str) -> None:
+    payload = str(metadata.get("payload", PAYLOAD_PIXELS))
+
+    if payload != expected_payload:
+        raise ValueError(
+            f"Encrypted PNG payload is {payload!r}, expected {expected_payload!r}."
+        )

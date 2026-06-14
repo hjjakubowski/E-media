@@ -4,7 +4,13 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from Projekt_2.src.png_crypto import decrypt_png, encrypt_png, read_metadata
+from Projekt_2.src.png_crypto import (
+    decrypt_compressed_idat_png,
+    decrypt_png,
+    encrypt_compressed_idat_png,
+    encrypt_png,
+    read_metadata,
+)
 from Projekt_2.src.png_format import (
     Ihdr,
     idat_data,
@@ -93,6 +99,28 @@ class PngCryptoTest(unittest.TestCase):
             encrypt_png(source, encrypted, public_key, "chain")
             decrypt_png(encrypted, decrypted, private_key)
 
+            self.assertEqual(pixels, self.read_pixels(decrypted))
+
+    def test_compressed_idat_encryption_roundtrips_original_idat_bytes(self) -> None:
+        public_key, private_key = generate_keypair(256)
+
+        with TemporaryDirectory() as temporary_directory:
+            temp_dir = Path(temporary_directory)
+            source = temp_dir / "compressed_source.png"
+            encrypted = temp_dir / "compressed_encrypted.png"
+            decrypted = temp_dir / "compressed_decrypted.png"
+            pixels = self.make_pixels(width=64, height=1, color_type=0)
+            self.write_test_png(source, 64, 1, 0, pixels, split_idat=True)
+
+            encrypt_compressed_idat_png(source, encrypted, public_key, "ecb")
+            decrypt_compressed_idat_png(encrypted, decrypted, private_key)
+
+            source_chunks = read_png(source)
+            encrypted_metadata = read_metadata(read_png(encrypted))
+            decrypted_chunks = read_png(decrypted)
+
+            self.assertEqual("compressed_idat", encrypted_metadata["payload"])
+            self.assertEqual(idat_data(source_chunks), idat_data(decrypted_chunks))
             self.assertEqual(pixels, self.read_pixels(decrypted))
 
     @staticmethod
