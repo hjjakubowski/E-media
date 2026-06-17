@@ -129,14 +129,7 @@ class PngCryptoTest(unittest.TestCase):
         return bytes((index * 37 + color_type) % 256 for index in range(size))
 
     @staticmethod
-    def write_test_png(
-        path: Path,
-        width: int,
-        height: int,
-        color_type: int,
-        pixels: bytes,
-        split_idat: bool = False,
-    ) -> None:
+    def write_test_png(path: Path, width: int, height: int, color_type: int, pixels: bytes, split_idat: bool = False) -> None:
         ihdr = Ihdr(
             width=width,
             height=height,

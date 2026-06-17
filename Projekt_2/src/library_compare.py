@@ -24,10 +24,7 @@ class LibraryCompareResult:
     explanation: str
 
 
-def compare_with_library_rsa(
-    source_path: Path,
-    private_key: RsaPrivateKey,
-) -> LibraryCompareResult:
+def compare_with_library_rsa(source_path: Path, private_key: RsaPrivateKey) -> LibraryCompareResult:
     try:
         from Crypto.Cipher import PKCS1_v1_5
         from Crypto.PublicKey import RSA

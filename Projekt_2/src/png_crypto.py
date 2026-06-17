@@ -33,12 +33,7 @@ PAYLOAD_PIXELS = "pixels"
 PAYLOAD_COMPRESSED_IDAT = "compressed_idat"
 
 
-def encrypt_png(
-    source_path: Path,
-    output_path: Path,
-    public_key: RsaPublicKey,
-    mode: str,
-) -> Path:
+def encrypt_png(source_path: Path,output_path: Path,public_key: RsaPublicKey,mode: str) -> Path:
     normalized_mode = mode.lower()
 
     if normalized_mode not in SUPPORTED_MODES:
@@ -92,11 +87,7 @@ def encrypt_png(
     return output_path
 
 
-def decrypt_png(
-    source_path: Path,
-    output_path: Path,
-    private_key: RsaPrivateKey,
-) -> Path:
+def decrypt_png(source_path: Path, output_path: Path, private_key: RsaPrivateKey) -> Path:
     chunks = read_png(source_path)
     encrypted_ihdr = parse_ihdr(chunks)
     validate_supported_png(encrypted_ihdr, expected_bit_depth=16)
@@ -137,12 +128,7 @@ def decrypt_png(
     return output_path
 
 
-def encrypt_compressed_idat_png(
-    source_path: Path,
-    output_path: Path,
-    public_key: RsaPublicKey,
-    mode: str,
-) -> Path:
+def encrypt_compressed_idat_png(source_path: Path, output_path: Path, public_key: RsaPublicKey, mode: str) -> Path:
     normalized_mode = mode.lower()
 
     if normalized_mode not in SUPPORTED_MODES:
@@ -196,11 +182,7 @@ def encrypt_compressed_idat_png(
     return output_path
 
 
-def decrypt_compressed_idat_png(
-    source_path: Path,
-    output_path: Path,
-    private_key: RsaPrivateKey,
-) -> Path:
+def decrypt_compressed_idat_png(source_path: Path, output_path: Path, private_key: RsaPrivateKey) -> Path:
     chunks = read_png(source_path)
     encrypted_ihdr = parse_ihdr(chunks)
     validate_supported_png(encrypted_ihdr, expected_bit_depth=16)
@@ -274,11 +256,7 @@ def read_metadata(chunks: list[PngChunk]) -> dict[str, object]:
     return json.loads(metadata_chunks[0].data.decode("utf-8"))
 
 
-def validate_metadata(
-    metadata: dict[str, object],
-    encrypted_ihdr: Ihdr,
-    private_key: RsaPrivateKey,
-) -> None:
+def validate_metadata(metadata: dict[str, object], encrypted_ihdr: Ihdr, private_key: RsaPrivateKey) -> None:
     if int(metadata.get("version", 0)) != METADATA_VERSION:
         raise ValueError("Unsupported RSA PNG metadata version.")
 

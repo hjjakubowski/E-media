@@ -23,13 +23,7 @@ class CompressionCompareResult:
     report_path: Path
 
 
-def compare_compression_methods(
-    source_path: Path,
-    output_dir: Path,
-    public_key: RsaPublicKey,
-    private_key: RsaPrivateKey,
-    mode: str,
-) -> CompressionCompareResult:
+def compare_compression_methods(source_path: Path, output_dir: Path, public_key: RsaPublicKey, private_key: RsaPrivateKey, mode: str) -> CompressionCompareResult:
     output_dir.mkdir(parents=True, exist_ok=True)
     stem = source_path.stem
 
@@ -75,16 +69,7 @@ def compare_compression_methods(
     )
 
 
-def build_compression_report_text(
-    source_path: Path,
-    pixel_encrypted_path: Path,
-    compressed_encrypted_path: Path,
-    source_idat_len: int,
-    pixel_plain_len: int,
-    pixel_cipher_len: int,
-    compressed_plain_len: int,
-    compressed_cipher_len: int,
-) -> str:
+def build_compression_report_text(source_path: Path, pixel_encrypted_path: Path, compressed_encrypted_path: Path, source_idat_len: int, pixel_plain_len: int, pixel_cipher_len: int, compressed_plain_len: int, compressed_cipher_len: int) -> str:
     return "\n".join(
         [
             "PNG compression method comparison",

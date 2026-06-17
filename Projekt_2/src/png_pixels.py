@@ -105,12 +105,7 @@ def unfilter_scanlines(ihdr: Ihdr, scanlines: bytes) -> bytes:
     return bytes(output)
 
 
-def unfilter_row(
-    filter_type: int,
-    filtered: bytes,
-    previous_row: bytes,
-    bpp: int,
-) -> bytes:
+def unfilter_row(filter_type: int, filtered: bytes, previous_row: bytes, bpp: int) -> bytes:
     row = bytearray(len(filtered))
 
     for index, value in enumerate(filtered):

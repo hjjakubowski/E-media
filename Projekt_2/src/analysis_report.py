@@ -27,12 +27,7 @@ class VisibilityReportResult:
     report_path: Path
 
 
-def generate_visibility_report(
-    source_path: Path,
-    output_dir: Path,
-    public_key: RsaPublicKey,
-    private_key: RsaPrivateKey,
-) -> VisibilityReportResult:
+def generate_visibility_report(source_path: Path, output_dir: Path, public_key: RsaPublicKey, private_key: RsaPrivateKey) -> VisibilityReportResult:
     output_dir.mkdir(parents=True, exist_ok=True)
     stem = source_path.stem
 
@@ -114,14 +109,7 @@ def count_repeated_blocks(data: bytes, block_size: int) -> BlockStats:
     )
 
 
-def build_visibility_report_text(
-    source_path: Path,
-    ecb_encrypted_path: Path,
-    chain_encrypted_path: Path,
-    source_stats: BlockStats,
-    ecb_stats: BlockStats,
-    chain_stats: BlockStats,
-) -> str:
+def build_visibility_report_text(source_path: Path, ecb_encrypted_path: Path, chain_encrypted_path: Path, source_stats: BlockStats, ecb_stats: BlockStats, chain_stats: BlockStats) -> str:
     return "\n".join(
         [
             "PNG RSA visibility report",

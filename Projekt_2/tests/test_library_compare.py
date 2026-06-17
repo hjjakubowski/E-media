@@ -33,13 +33,7 @@ class LibraryCompareTest(unittest.TestCase):
             self.assertTrue(result.library_is_probabilistic)
 
 
-def write_test_png(
-    path: Path,
-    width: int,
-    height: int,
-    color_type: int,
-    pixels: bytes,
-) -> None:
+def write_test_png(path: Path, width: int, height: int, color_type: int, pixels: bytes) -> None:
     ihdr = Ihdr(
         width=width,
         height=height,

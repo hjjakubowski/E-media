@@ -140,24 +140,12 @@ class PngRsaGui:
         self.status_label = ttk.Label(self.root, text="Gotowe", anchor="w")
         self.status_label.grid(row=4, column=0, padx=10, pady=(0, 8), sticky="ew")
 
-    def add_button(
-        self,
-        parent: ttk.Frame,
-        text: str,
-        command: object,
-    ) -> ttk.Button:
+    def add_button(self, parent: ttk.Frame, text: str, command: object) -> ttk.Button:
         button = ttk.Button(parent, text=text, command=command)
         self.buttons.append(button)
         return button
 
-    def add_image_panel(
-        self,
-        parent: ttk.Frame,
-        key: str,
-        title: str,
-        row: int,
-        column: int,
-    ) -> None:
+    def add_image_panel(self, parent: ttk.Frame, key: str, title: str, row: int, column: int) -> None:
         frame = ttk.LabelFrame(parent, text=title, padding=8)
         frame.grid(row=row, column=column, padx=5, pady=5, sticky="nsew")
         frame.columnconfigure(0, weight=1)
@@ -360,12 +348,7 @@ class PngRsaGui:
 
         self.run_in_background("Porównywanie z biblioteką RSA...", task, self.show_text_result)
 
-    def run_in_background(
-        self,
-        status: str,
-        task: object,
-        on_success: object,
-    ) -> None:
+    def run_in_background(self, status: str, task: object, on_success: object) -> None:
         self.set_status(status)
         self.set_buttons_state("disabled")
         self.set_output_text(status + "\n")

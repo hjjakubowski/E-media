@@ -197,10 +197,7 @@ def replace_idat(chunks: list[PngChunk], compressed_data: bytes) -> list[PngChun
     return output
 
 
-def insert_before_first_idat(
-    chunks: list[PngChunk],
-    new_chunk: PngChunk,
-) -> list[PngChunk]:
+def insert_before_first_idat(chunks: list[PngChunk], new_chunk: PngChunk) -> list[PngChunk]:
     output: list[PngChunk] = []
     inserted = False
 

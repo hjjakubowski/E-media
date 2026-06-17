@@ -57,10 +57,7 @@ def public_from_private(private_key: RsaPrivateKey) -> RsaPublicKey:
     return RsaPublicKey(n=private_key.n, e=private_key.e)
 
 
-def generate_keypair(
-    bits: int = 512,
-    public_exponent: int = DEFAULT_PUBLIC_EXPONENT,
-) -> tuple[RsaPublicKey, RsaPrivateKey]:
+def generate_keypair(bits: int = 512,public_exponent: int = DEFAULT_PUBLIC_EXPONENT,) -> tuple[RsaPublicKey, RsaPrivateKey]:
     if bits < 128:
         raise ValueError("RSA key size must be at least 128 bits.")
 

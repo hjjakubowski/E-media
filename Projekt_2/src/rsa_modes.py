@@ -32,11 +32,7 @@ def encrypt_bytes_ecb(data: bytes, public_key: RsaPublicKey) -> bytes:
     return bytes(output)
 
 
-def decrypt_bytes_ecb(
-    ciphertext: bytes,
-    private_key: RsaPrivateKey,
-    original_length: int,
-) -> bytes:
+def decrypt_bytes_ecb(ciphertext: bytes, private_key: RsaPrivateKey, original_length: int) -> bytes:
     public_key = public_from_private(private_key)
     plain_size = plain_block_size(public_key)
     cipher_size = cipher_block_size(public_key)
@@ -54,11 +50,7 @@ def decrypt_bytes_ecb(
     return bytes(output[:original_length])
 
 
-def encrypt_bytes_chain(
-    data: bytes,
-    public_key: RsaPublicKey,
-    iv: bytes | None = None,
-) -> tuple[bytes, bytes]:
+def encrypt_bytes_chain(data: bytes, public_key: RsaPublicKey, iv: bytes | None = None) -> tuple[bytes, bytes]:
     plain_size = plain_block_size(public_key)
     cipher_size = cipher_block_size(public_key)
 
@@ -81,12 +73,7 @@ def encrypt_bytes_chain(
     return bytes(output), iv
 
 
-def decrypt_bytes_chain(
-    ciphertext: bytes,
-    private_key: RsaPrivateKey,
-    original_length: int,
-    iv: bytes,
-) -> bytes:
+def decrypt_bytes_chain(ciphertext: bytes, private_key: RsaPrivateKey, original_length: int, iv: bytes) -> bytes:
     public_key = public_from_private(private_key)
     plain_size = plain_block_size(public_key)
     cipher_size = cipher_block_size(public_key)
@@ -110,11 +97,7 @@ def decrypt_bytes_chain(
     return bytes(output[:original_length])
 
 
-def encrypt_bytes(
-    data: bytes,
-    public_key: RsaPublicKey,
-    mode: str,
-) -> tuple[bytes, bytes]:
+def encrypt_bytes(data: bytes, public_key: RsaPublicKey, mode: str) -> tuple[bytes, bytes]:
     normalized_mode = mode.lower()
 
     if normalized_mode == MODE_ECB:
@@ -126,13 +109,7 @@ def encrypt_bytes(
     raise ValueError(f"Unsupported RSA mode: {mode}")
 
 
-def decrypt_bytes(
-    ciphertext: bytes,
-    private_key: RsaPrivateKey,
-    original_length: int,
-    mode: str,
-    iv: bytes = b"",
-) -> bytes:
+def decrypt_bytes(ciphertext: bytes, private_key: RsaPrivateKey, original_length: int, mode: str, iv: bytes = b"") -> bytes:
     normalized_mode = mode.lower()
 
     if normalized_mode == MODE_ECB:
